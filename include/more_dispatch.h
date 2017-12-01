@@ -1,6 +1,8 @@
 #ifndef more_dispatch_h
 #define more_dispatch_h
 
+#include <assert.h>
+
 #include <algorithm>
 #include <condition_variable>
 #include <memory>
@@ -112,6 +114,11 @@ namespace more
 				std::lock_guard<std::mutex> lock(_mutex);
 				std::swap(q, _queue);
 			}
+			if (q.empty() && _done)
+			{
+				_cond.notify_all();
+				return;
+			}
 
 			for (auto& block : q)
 				block->invoke();
@@ -131,7 +138,13 @@ namespace more
 						_cond.wait(lock);
 					std::swap(q, _queue);
 				}
-				if (q.empty()) return;
+				if (q.empty())
+				{
+					assert(_done);
+					_cond.notify_all();
+					return;
+				}
+
 				for (auto& block : q)
 					block->invoke();
 			}
