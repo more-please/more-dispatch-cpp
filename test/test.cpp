@@ -4,7 +4,7 @@
 #include <chrono>
 #include <thread>
 
-#include "../include/more_dispatch.h"
+#include "../include/more_dispatch/more_dispatch.h"
 
 void test_dispatch_queue()
 {
