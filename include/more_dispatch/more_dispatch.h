@@ -16,6 +16,7 @@ namespace more
 	// -------------------------------------------------------------------------
 	// dispatch_block: container for any no-args function returning void.
 	// These are the objects that you can send to a dispatch queue.
+	// TODO: just use std::function!
 
 	struct dispatch_block
 	{
@@ -34,10 +35,7 @@ namespace more
 
 	public:
 		explicit dispatch_lambda(F&& lambda) : _lambda(std::move(lambda)) {}
-		void invoke()
-		{
-			_lambda();
-		}
+		void invoke() { _lambda(); }
 	};
 
 	// -------------------------------------------------------------------------
@@ -114,8 +112,7 @@ namespace more
 				std::lock_guard<std::mutex> lock(_mutex);
 				std::swap(q, _queue);
 			}
-			if (q.empty() && _done)
-			{
+			if (q.empty() && _done) {
 				_cond.notify_all();
 				return;
 			}
@@ -129,8 +126,7 @@ namespace more
 		// This method should typically be called from a background thread.
 		void run_forever()
 		{
-			while (true)
-			{
+			while (true) {
 				std::vector<dispatch_block::ptr> q;
 				{
 					std::unique_lock<std::mutex> lock(_mutex);
@@ -138,8 +134,7 @@ namespace more
 						_cond.wait(lock);
 					std::swap(q, _queue);
 				}
-				if (q.empty())
-				{
+				if (q.empty()) {
 					assert(_done);
 					_cond.notify_all();
 					return;
@@ -190,10 +185,7 @@ namespace more
 
 		// Stop accepting new blocks. dispatch() will now return false.
 		// This method is idempotent; it's safe to call it multiple times.
-		void stop()
-		{
-			_queue.stop();
-		}
+		void stop() { _queue.stop(); }
 
 		// Destructor. Stops the queue and waits for outstanding blocks to run.
 		~dispatch_thread()
@@ -203,6 +195,6 @@ namespace more
 			_thread.join();
 		}
 	};
-}
+} // namespace more
 
 #endif // more_dispatch_h
