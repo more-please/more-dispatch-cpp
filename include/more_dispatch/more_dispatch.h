@@ -169,6 +169,9 @@ namespace more
 	public:
 		dispatch_thread() : _thread(&dispatch_queue::run_forever, &_queue) {}
 
+		// Get this thread's dispatch queue.
+		dispatch_queue& queue() { return _queue; }
+
 		// Post a block for execution on the background thread.
 		// Returns true on success, false if the queue is stopped.
 		bool dispatch(dispatch_block::ptr& block)
