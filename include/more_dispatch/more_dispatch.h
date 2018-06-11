@@ -90,10 +90,7 @@ namespace more
 		bool _done = false;
 		std::vector<dispatch_block> _queue;
 
-	public:
-		// Queue a block for execution.
-		// Returns true on success, false if the queue is stopped.
-		bool dispatch(dispatch_block&& block)
+		bool _dispatch(dispatch_block&& block)
 		{
 			std::lock_guard<std::mutex> lock(_mutex);
 			if (_done) return false;
@@ -103,12 +100,13 @@ namespace more
 			return true;
 		}
 
+	public:
 		// Queue a lambda expression or functor for execution.
 		// Returns true on success, false if the queue is stopped.
 		template <typename F> bool dispatch(F&& lambda)
 		{
 			movable_function<F> function(std::move(lambda));
-			return dispatch(std::move(function));
+			return _dispatch(std::move(function));
 		}
 
 		// Stop accepting new blocks. dispatch() will now return false.
@@ -195,13 +193,6 @@ namespace more
 
 		// Get this thread's dispatch queue.
 		dispatch_queue& queue() { return _queue; }
-
-		// Post a block for execution on the background thread.
-		// Returns true on success, false if the queue is stopped.
-		bool dispatch(dispatch_block&& block)
-		{
-			return _queue.dispatch(std::move(block));
-		}
 
 		// Post a lambda expression for execution on the background thread.
 		// Returns true on success, false if the queue is stopped.
