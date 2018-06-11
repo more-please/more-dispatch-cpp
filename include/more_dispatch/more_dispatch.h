@@ -41,7 +41,7 @@ namespace more
 
 	struct dispatch_block : public movable_function_base
 	{
-		void* _space[3];
+		void* _space[4];
 
 		dispatch_block() = delete;
 		dispatch_block(const dispatch_block&) = delete;
