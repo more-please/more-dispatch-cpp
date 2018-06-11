@@ -17,29 +17,50 @@ namespace more
 	// dispatch_block: container for any no-args function returning void.
 	// These are the objects that you can send to a dispatch queue.
 
-	struct dispatch_block
+	struct movable_function_base
 	{
 		virtual void invoke() = 0;
-		virtual ~dispatch_block() = default;
-
-		typedef std::unique_ptr<dispatch_block> ptr;
+		virtual void move_to(void* dest, size_t size) = 0;
+		virtual ~movable_function_base() = default;
 	};
 
-	// TODO: can't use std::function as that only works with copyable lambdas,
-	// and I definitely want to e.g. dispatch lambda with unique_ptrs.
-	// Could maybe do some optimization to store small lambdas inline -- that
-	// would involve a virtual move constructor.
-
-	// -------------------------------------------------------------------------
-	// dispatch_lambda: wraps a C++ lambda expression in a block.
-
-	template <typename F> class dispatch_lambda : public dispatch_block
+	template <typename F> struct movable_function : public movable_function_base
 	{
-		F _lambda;
+		F _function;
 
-	public:
-		explicit dispatch_lambda(F&& lambda) : _lambda(std::move(lambda)) {}
-		void invoke() { _lambda(); }
+		movable_function(F&& function) : _function(std::move(function)) {}
+
+		virtual void invoke() { _function(); }
+
+		virtual void move_to(void* dest, size_t size)
+		{
+			assert(size >= sizeof(*this));
+			new (dest) movable_function(std::move(*this));
+		}
+	};
+
+	struct dispatch_block : public movable_function_base
+	{
+		void* _space[3];
+
+		dispatch_block() = delete;
+		dispatch_block(const dispatch_block&) = delete;
+
+		dispatch_block(dispatch_block&& other)
+		{
+			other.move_to(this, sizeof(*this));
+		}
+
+		dispatch_block(movable_function_base&& other)
+		{
+			other.move_to(this, sizeof(*this));
+		}
+
+		virtual void move_to(void* dest, size_t size) { assert(false); }
+
+		virtual void invoke() { assert(false); }
+
+		void operator()() { invoke(); }
 	};
 
 	// -------------------------------------------------------------------------
@@ -67,12 +88,12 @@ namespace more
 		std::mutex _mutex;
 		std::condition_variable _cond;
 		bool _done = false;
-		std::vector<dispatch_block::ptr> _queue;
+		std::vector<dispatch_block> _queue;
 
 	public:
 		// Queue a block for execution.
 		// Returns true on success, false if the queue is stopped.
-		bool dispatch(dispatch_block::ptr& block)
+		bool dispatch(dispatch_block&& block)
 		{
 			std::lock_guard<std::mutex> lock(_mutex);
 			if (_done) return false;
@@ -84,11 +105,10 @@ namespace more
 
 		// Queue a lambda expression or functor for execution.
 		// Returns true on success, false if the queue is stopped.
-		template <typename F> bool dispatch(F&& function)
+		template <typename F> bool dispatch(F&& lambda)
 		{
-			typedef dispatch_lambda<F> lambda;
-			auto block = dispatch_block::ptr(new lambda(std::move(function)));
-			return dispatch(block);
+			movable_function<F> function(std::move(lambda));
+			return dispatch(std::move(function));
 		}
 
 		// Stop accepting new blocks. dispatch() will now return false.
@@ -111,7 +131,7 @@ namespace more
 		// Grab some blocks from the queue, if any are available, and run them.
 		void run_once()
 		{
-			std::vector<dispatch_block::ptr> q;
+			std::vector<dispatch_block> q;
 			{
 				std::lock_guard<std::mutex> lock(_mutex);
 				std::swap(q, _queue);
@@ -122,7 +142,7 @@ namespace more
 			}
 
 			for (auto& block : q)
-				block->invoke();
+				block.invoke();
 		}
 
 		// Run blocks as they arrive. Will not return until stop() is called.
@@ -131,7 +151,7 @@ namespace more
 		void run_forever()
 		{
 			while (true) {
-				std::vector<dispatch_block::ptr> q;
+				std::vector<dispatch_block> q;
 				{
 					std::unique_lock<std::mutex> lock(_mutex);
 					while (_queue.empty() && !_done)
@@ -145,7 +165,7 @@ namespace more
 				}
 
 				for (auto& block : q)
-					block->invoke();
+					block.invoke();
 			}
 		}
 
@@ -178,9 +198,9 @@ namespace more
 
 		// Post a block for execution on the background thread.
 		// Returns true on success, false if the queue is stopped.
-		bool dispatch(dispatch_block::ptr& block)
+		bool dispatch(dispatch_block&& block)
 		{
-			return _queue.dispatch(block);
+			return _queue.dispatch(std::move(block));
 		}
 
 		// Post a lambda expression for execution on the background thread.
