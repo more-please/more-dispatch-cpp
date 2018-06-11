@@ -16,7 +16,6 @@ namespace more
 	// -------------------------------------------------------------------------
 	// dispatch_block: container for any no-args function returning void.
 	// These are the objects that you can send to a dispatch queue.
-	// TODO: just use std::function!
 
 	struct dispatch_block
 	{
@@ -25,6 +24,11 @@ namespace more
 
 		typedef std::unique_ptr<dispatch_block> ptr;
 	};
+
+	// TODO: can't use std::function as that only works with copyable lambdas,
+	// and I definitely want to e.g. dispatch lambda with unique_ptrs.
+	// Could maybe do some optimization to store small lambdas inline -- that
+	// would involve a virtual move constructor.
 
 	// -------------------------------------------------------------------------
 	// dispatch_lambda: wraps a C++ lambda expression in a block.
